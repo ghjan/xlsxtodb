@@ -9,11 +9,8 @@ import (
 	"github.com/ghjan/xlsxtodb/pkg/utils"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
-	"github.com/tealeg/xlsx"
 	"os"
 	"runtime"
-	"strconv"
-	"strings"
 )
 
 var (
@@ -94,24 +91,6 @@ func main() {
 	db := connectDB()
 
 	defer db.Close()
-	c, _ := convert.GetColumns(db, driverName, tableName)
-
-	xlFile, err := xlsx.OpenFile(excelFileName)
-	if err != nil {
-		utils.Checkerr(err, excelFileName)
-	}
-	sheetSlice := strings.Split(sheets, ",")
-	for _, sheetIndex := range sheetSlice {
-		nIndex, err := strconv.Atoi(sheetIndex)
-		utils.Checkerr(err, "")
-		if nIndex >= len(xlFile.Sheets) {
-			fmt.Printf("Sheet index should small then length of sheets.sheet:%d, len(xlFile.Sheets):%d\n", sheetIndex, len(xlFile.Sheets))
-			return
-		}
-		sheet_ := xlFile.Sheets[nIndex]
-		fmt.Printf("--------sheet%s, %s----------\n", sheetIndex, sheet_.Name)
-		err = convert.Convert(c, sheet_, db, dataStartRow, driverName, tableName)
-		utils.Checkerr(err, fmt.Sprintf("sheetIndex:%d", nIndex))
-	}
+	convert.ConverExcelToDB(db, driverName, tableName, excelFileName, sheets, dataStartRow)
 
 }
