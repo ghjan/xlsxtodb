@@ -1,0 +1,161 @@
+--
+-- PostgreSQL database dump
+--
+
+-- Dumped from database version 11.2
+-- Dumped by pg_dump version 11.2
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET client_min_messages = warning;
+SET row_security = off;
+
+SET default_tablespace = '';
+
+SET default_with_oids = false;
+
+CREATE AGGREGATE group_concat(anyelement)
+(
+    sfunc = array_append, -- 每行的操作函数，将本行append到数组里
+    stype = anyarray,  -- 聚集后返回数组类型
+    initcond = '{}'    -- 初始化空数组
+);
+
+--
+-- Name: auth_assignment; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.auth_assignment (
+    id  serial NOT NULL,
+    type bigint NOT NULL,
+    user_id bigint NOT NULL,
+    created_at bigint NOT NULL
+);
+
+
+ALTER TABLE public.auth_assignment OWNER TO postgres;
+
+--
+-- Name: group; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."group" (
+    id  serial NOT NULL,
+    name character varying(50) NOT NULL
+);
+
+
+ALTER TABLE public."group" OWNER TO postgres;
+
+--
+-- Name: user; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."user" (
+    id  serial NOT NULL,
+    username character varying(30) NOT NULL,
+    auth_key character varying(32) NOT NULL,
+    password_hash character varying(128) NOT NULL,
+    group_id bigint,
+    status smallint NOT NULL,
+    created_at bigint NOT NULL,
+    updated_at bigint
+);
+
+
+ALTER TABLE public."user" OWNER TO postgres;
+
+--
+-- Data for Name: auth_assignment; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.auth_assignment (id, type, user_id, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: group; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."group" (id, name) FROM stdin;
+2	用户
+1	管理员
+\.
+
+
+--
+-- Data for Name: user; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."user" (id, username, auth_key, password_hash, group_id, status, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Name: auth_assignment auth_assignment_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.auth_assignment
+    ADD CONSTRAINT auth_assignment_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: group group_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."group"
+    ADD CONSTRAINT group_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user user_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fk_user_group_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX fk_user_group_id ON public."user" USING btree (group_id);
+
+
+--
+-- Name: uniq_idx_assignment_user_type; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX uniq_idx_assignment_user_type ON public.auth_assignment USING btree (type, user_id);
+
+
+--
+-- Name: uniq_idx_group_name; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX uniq_idx_group_name ON public."group" USING btree (name);
+
+
+--
+-- Name: uniq_idx_user_username; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX uniq_idx_user_username ON public."user" USING btree (username);
+
+
+--
+-- Name: user user_group_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_group_id_fkey FOREIGN KEY (group_id) REFERENCES public."group"(id);
+
+--
+-- PostgreSQL database dump complete
+--
+
