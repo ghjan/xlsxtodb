@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
+	"github.com/ghjan/xlsxtodb/custom/excelstruct"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 	"github.com/tealeg/xlsx"
 	"time"
-	"xlsxtodb/custom/excelstruct"
 )
 
 /*
