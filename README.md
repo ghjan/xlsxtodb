@@ -1,4 +1,4 @@
-# Excel(xlsx)导入MySQL数据库
+# Excel(xlsx)导入MySQL/postgres数据库
 
 ## 简介
 
@@ -35,7 +35,7 @@
 支持多个sheets
 
 ### v0.1.2
-
+fork from https://github.com/TargetLiu/xlsxtomysql
 修复bug
 
 ### v0.1.1
