@@ -402,7 +402,7 @@ func ConverExcelToDB(db *sql.DB, driverName, tableName, excelFileName, sheets st
 			}
 		}(sheetIndex)
 	}
-	for sheetIndex := dataStartRow - 1; sheetIndex <= len(sheetSlice); sheetIndex++ {
+	for sheetIndex := 0; sheetIndex < len(sheetSlice); sheetIndex++ {
 		<-sign
 	}
 }
