@@ -45,219 +45,224 @@ func Convert(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driver
 	c.xlsxColumns = sheet.Rows[0].Cells
 	c.ParaseColumns()
 	//ch := make(chan int, 50)
-	sign := make(chan string, len(sheet.Rows))
 	rowsNum := len(sheet.Rows) //- dataStartRow + 2
-	for i := dataStartRow - 1; i < rowsNum; i++ {
-		//ch <- i
-		go func(rowIndex int) {
-			utils.Checkerr(err, "")
-			r := &Row{value: make(map[string]string), sql: "", ot: OtherTable{}}
-			tmp := 0
-			var fieldNames []string
-			var values []string
-			needConflictOnFields := ""
-			needConflictOnFieldsOther := ""
-			updateSetSql := ""
-			whereSql := ""
-			//var excludedFields []string
-			var ids string
-			excludedFieldSet := set.New()
-			updatedFieldSet := set.New()
-			var uniqTogetherMap = map[string]string{}
-			for key, value := range c.useColumns {
-				if value == nil || len(sheet.Rows) <= 0 {
-					fmt.Printf("c.useColumns:%#v\n", c.useColumns)
-					continue
-				}
-				if key >= len(sheet.Rows[rowIndex].Cells) || sheet.Rows[rowIndex].Cells[key] == nil {
-					r.value[value[0]] = ""
-				} else {
-					r.value[value[0]] = sheet.Rows[rowIndex].Cells[key].String()
-				}
-				//解析内容
-				if value[0] == ":other" {
-					r.ot.value = strings.Split(r.value[value[0]], "|")
-					sqlOther := "SELECT * FROM " + utils.EscapeString(driverName, r.ot.value[0])
-					rows, err := db.Query(sqlOther)
-					utils.Checkerr(err, sqlOther)
-					r.ot.columns, err = rows.Columns()
-					rows.Close()
-					utils.Checkerr(err, sqlOther)
+	for rowIndex := dataStartRow - 1; rowIndex < rowsNum; rowIndex++ {
+		//ch <- rowIndex
+		utils.Checkerr(err, "")
+		r := &Row{value: make(map[string]string), sql: "", ot: OtherTable{}}
+		tmp := 0
+		var fieldNames []string
+		var values []string
+		needConflictOnFields := ""
+		needConflictOnFieldsOther := ""
+		updateSetSql := ""
+		whereSql := ""
+		//var excludedFields []string
+		var ids string
+		excludedFieldSet := set.New()
+		updatedFieldSet := set.New()
+		var uniqTogetherMap = map[string]string{}
+		for key, value := range c.useColumns {
+			if value == nil || len(sheet.Rows) <= 0 {
+				fmt.Printf("c.useColumns:%#v\n", c.useColumns)
+				continue
+			}
+			if key >= len(sheet.Rows[rowIndex].Cells) || sheet.Rows[rowIndex].Cells[key] == nil {
+				r.value[value[0]] = ""
+			} else {
+				r.value[value[0]] = sheet.Rows[rowIndex].Cells[key].String()
+			}
+			//解析内容
+			if value[0] == ":other" {
+				r.ot.value = strings.Split(r.value[value[0]], "|")
+				sqlOther := "SELECT * FROM " + utils.EscapeString(driverName, r.ot.value[0])
+				rows, err := db.Query(sqlOther)
+				utils.Checkerr(err, sqlOther)
+				r.ot.columns, err = rows.Columns()
+				rows.Close()
+				utils.Checkerr(err, sqlOther)
 
-					for _, v := range value {
-						if strings.Index(v, "unique=") >= 0 {
-							needConflictOnFieldsOther = strings.Join(strings.Split(strings.TrimPrefix(v, "unique="), "+"), ",")
-						}
+				for _, v := range value {
+					if strings.Index(v, "unique=") >= 0 {
+						needConflictOnFieldsOther = strings.Join(strings.Split(strings.TrimPrefix(v,
+							"unique="), "+"), ",")
 					}
-				} else {
-					if len(value) > 1 {
-						switch value[1] {
-						case "unique":
-							uniqueSql := "SELECT group_concat(id) as ids, count(" + value[0] + ") as has FROM  " +
-								utils.EscapeString(driverName, tableName) + "  WHERE  " + value[0] + "  = '" +
-								utils.EscapeSpecificChar(r.value[value[0]]) + "'"
-							//fmt.Printf("uniqueSql:%s\n", uniqueSql)
-							result, _ := utils.FetchRow(db, uniqueSql)
-							has, _ := strconv.Atoi((*result)["has"])
-							ids = (*result)["ids"]
-							if ids != "" && ids != "{}" {
-								ids = strings.TrimSuffix(strings.TrimPrefix(ids, "{"), "}")
-							}
-							if has > 0 {
-								if needConflictOnFields == "" {
-									needConflictOnFields = value[0]
-								} else {
-									needConflictOnFields += "," + value[0]
-								}
-							}
-						case "uniq_together":
-							uniqTogetherMap[value[0]] = utils.EscapeSpecificChar(r.value[value[0]])
+				}
+			} else {
+				if len(value) > 1 {
+					switch value[1] {
+					case "unique":
+						uniqueSql := "SELECT group_concat(id) as ids, count(" + value[0] + ") as has FROM  " +
+							utils.EscapeString(driverName, tableName) + "  WHERE  " + value[0] + "  = '" +
+							utils.EscapeSpecificChar(r.value[value[0]]) + "'"
+						//fmt.Printf("uniqueSql:%s\n", uniqueSql)
+						result, _ := utils.FetchRow(db, uniqueSql)
+						has, _ := strconv.Atoi((*result)["has"])
+						ids = (*result)["ids"]
+						if ids != "" && ids != "{}" {
+							ids = strings.TrimSuffix(strings.TrimPrefix(ids, "{"), "}")
+						}
+						if has > 0 {
 							if needConflictOnFields == "" {
 								needConflictOnFields = value[0]
 							} else {
 								needConflictOnFields += "," + value[0]
 							}
-						case "password":
-							tmpvalue := strings.Split(r.value[value[0]], "|")
-							if len(tmpvalue) == 2 {
-								if []byte(tmpvalue[1])[0] == ':' {
-									if _, ok := r.value[string([]byte(tmpvalue[1])[1:])]; ok {
-										r.value[value[0]] = tmpvalue[0] + r.value[string([]byte(tmpvalue[1])[1:])]
-									} else {
-										fmt.Print("[" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) + "]密码盐" + string([]byte(tmpvalue[1])[1:]) + "字段不存在，自动跳过\n")
-										sign <- "error"
-										return
-									}
+						}
+					case "uniq_together":
+						uniqTogetherMap[value[0]] = utils.EscapeSpecificChar(r.value[value[0]])
+						if needConflictOnFields == "" {
+							needConflictOnFields = value[0]
+						} else {
+							needConflictOnFields += "," + value[0]
+						}
+					case "password":
+						tmpvalue := strings.Split(r.value[value[0]], "|")
+						if len(tmpvalue) == 2 {
+							if []byte(tmpvalue[1])[0] == ':' {
+								if _, ok := r.value[string([]byte(tmpvalue[1])[1:])]; ok {
+									r.value[value[0]] = tmpvalue[0] + r.value[string([]byte(tmpvalue[1])[1:])]
 								} else {
-									r.value[value[0]] += tmpvalue[1]
+									msg := "[" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) +
+										"]密码盐" + string([]byte(tmpvalue[1])[1:]) + "字段不存在，自动跳过"
+									//fmt.Println(msg)
+									err = errors.New(msg)
+									//sign <- "error"
+									return
 								}
 							} else {
-								r.value[value[0]] = tmpvalue[0]
+								r.value[value[0]] += tmpvalue[1]
 							}
-							switch value[2] {
-							case "md5":
-								r.value[value[0]] = string(md5.New().Sum([]byte(r.value[value[0]])))
-							case "bcrypt":
-								pass, _ := bcrypt.GenerateFromPassword([]byte(r.value[value[0]]), 13)
-								r.value[value[0]] = string(pass)
-							}
-						case "find":
-
-							result, _ := utils.FetchRow(db, "SELECT  "+value[3]+"  FROM  "+utils.EscapeString(driverName, value[2])+"  WHERE "+value[4]+" = '"+r.value[value[0]]+"'")
-							if (*result)["id"] == "" {
-								fmt.Print("[" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) + "]表 " + value[2] + " 中没有找到 " + value[4] + " 为 " + r.value[value[0]] + " 的数据，自动跳过\n")
-								sign <- "error"
-								return
-							}
-							excludedFieldSet.Add(value[0])
-							updatedFieldSet.Add(value[0])
-							r.value[value[0]] = (*result)["id"]
+						} else {
+							r.value[value[0]] = tmpvalue[0]
 						}
-					}
-					var pro bool
-					r.value[value[0]], pro = ParseValue(r.value[value[0]])
-
-					if r.value[value[0]] != "" {
-						fieldNames = append(fieldNames, value[0])
-						values = append(values, utils.EscapeValuesString(driverName, r.value[value[0]]))
+						switch value[2] {
+						case "md5":
+							r.value[value[0]] = string(md5.New().Sum([]byte(r.value[value[0]])))
+						case "bcrypt":
+							pass, _ := bcrypt.GenerateFromPassword([]byte(r.value[value[0]]), 13)
+							r.value[value[0]] = string(pass)
+						}
+					case "find":
+						result, _ := utils.FetchRow(db, "SELECT  "+value[3]+"  FROM  "+utils.EscapeString(driverName, value[2])+"  WHERE "+value[4]+" = '"+r.value[value[0]]+"'")
+						if (*result)["id"] == "" {
+							//sign <- "error"
+							msg := "[" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) + "]表 " +
+								value[2] + " 中没有找到 " + value[4] + " 为 " + r.value[value[0]] + " 的数据，自动跳过"
+							//fmt.Println(msg)
+							err = errors.New(msg)
+							return
+						}
+						excludedFieldSet.Add(value[0])
 						updatedFieldSet.Add(value[0])
+						r.value[value[0]] = (*result)["id"]
+					}
+				}
+				var pro bool
+				r.value[value[0]], pro = ParseValue(r.value[value[0]])
+
+				if r.value[value[0]] != "" {
+					fieldNames = append(fieldNames, value[0])
+					values = append(values, utils.EscapeValuesString(driverName, r.value[value[0]]))
+					updatedFieldSet.Add(value[0])
+					if !pro {
+						excludedFieldSet.Add(value[0])
+					}
+					tmp++
+				}
+			}
+		}
+		insertSql, updateSetSql, whereSql := GetUpdateSql(driverName, tableName, fieldNames, values,
+			needConflictOnFields, updatedFieldSet, excludedFieldSet)
+		r.sql = insertSql
+		if needConflictOnFields != "" && updateSetSql != "" && whereSql != "" {
+			r.sql += " ON CONFLICT (" + needConflictOnFields + ") DO UPDATE SET " +
+				updateSetSql + whereSql
+		}
+		r.sql += " RETURNING id"
+		db.QueryRow(r.sql + ";").Scan(&r.insertID)
+
+		idOfMainRecord := int(r.insertID)
+		if idOfMainRecord == 0 {
+			fmt.Println(r.sql)
+			if ids != "" {
+				idOfMainRecord, _ = strconv.Atoi(strings.Split(ids, ",")[0])
+			} else if len(uniqTogetherMap) > 0 {
+				uniqTogetherSql := " select id from " + tableName + " where "
+				indexTemp := 0
+				for field, value := range uniqTogetherMap {
+					if indexTemp > 0 {
+						uniqTogetherSql += " and "
+					}
+					uniqTogetherSql += field + "=" + utils.EscapeValuesString(driverName, value)
+					indexTemp += 1
+				}
+				result, _ := utils.FetchRow(db, uniqTogetherSql)
+				id := (*result)["id"]
+				if id != "" {
+					idOfMainRecord, _ = strconv.Atoi(id)
+				}
+			}
+		}
+		if idOfMainRecord == 0 {
+			err = errors.New("id is 0")
+			return
+		}
+		utils.Checkerr(err, r.sql)
+		if idOfMainRecord > 0 && err == nil {
+			//更新id自增长值
+			idSeqField := tableName + "_id_seq"
+			// SELECT setval('', (SELECT max(id) FROM tableName))
+			sqlIdSeq := "SELECT setval('" + idSeqField + "', (SELECT max(id) FROM " + tableName + "))"
+			db.Query(sqlIdSeq)
+		}
+
+		//执行附表操作
+		updateSetSql = ""
+		whereSql = ""
+		excludedFieldSet = set.New()
+		updatedFieldSet = set.New()
+		tableNameOther := ""
+		if r.ot.value != nil {
+			tableNameOther = r.ot.value[0]
+			tmp = 0
+			var fieldNames []string
+			var values []string
+			for key, value := range r.ot.columns {
+				var pro bool
+				r.ot.value[key+1], pro = ParseValue(r.ot.value[key+1])
+				if r.ot.value[key+1] == ":id" {
+					r.ot.value[key+1] = strconv.Itoa(idOfMainRecord)
+				}
+				if r.ot.value[key+1] != "" {
+					if value != "" {
+						fieldNames = append(fieldNames, value)
+						values = append(values, r.ot.value[key+1])
+						updatedFieldSet.Add(value)
 						if !pro {
-							excludedFieldSet.Add(value[0])
+							excludedFieldSet.Add(value)
 						}
 						tmp++
 					}
 				}
 			}
-			insertSql, updateSetSql, whereSql := GetUpdateSql(driverName, tableName, fieldNames, values,
-				needConflictOnFields, updatedFieldSet, excludedFieldSet)
-			r.sql = insertSql
-			if needConflictOnFields != "" && updateSetSql != "" && whereSql != "" {
-				r.sql += " ON CONFLICT (" + needConflictOnFields + ") DO UPDATE SET " +
+			insertSql, updateSetSql, whereSql = GetUpdateSql(driverName, tableNameOther, fieldNames, values,
+				needConflictOnFieldsOther, updatedFieldSet, excludedFieldSet)
+			r.ot.sql = insertSql
+			if needConflictOnFieldsOther != "" {
+				r.ot.sql += " ON CONFLICT (" + needConflictOnFieldsOther + ") DO UPDATE SET " +
 					updateSetSql + whereSql
 			}
-			r.sql += " RETURNING id"
-			db.QueryRow(r.sql + ";").Scan(&r.insertID)
 
-			idOfMainRecord := int(r.insertID)
-			if idOfMainRecord == 0 {
-				fmt.Println(r.sql)
-				if ids != "" {
-					idOfMainRecord, _ = strconv.Atoi(strings.Split(ids, ",")[0])
-				} else if len(uniqTogetherMap) > 0 {
-					uniqTogetherSql := " select id from " + tableName + " where "
-					indexTemp := 0
-					for field, value := range uniqTogetherMap {
-						if indexTemp > 0 {
-							uniqTogetherSql += " and "
-						}
-						uniqTogetherSql += field + "=" + utils.EscapeValuesString(driverName, value)
-						indexTemp += 1
-					}
-					result, _ := utils.FetchRow(db, uniqTogetherSql)
-					id := (*result)["id"]
-					if id != "" {
-						idOfMainRecord, _ = strconv.Atoi(id)
-					}
-				}
-			}
-			if idOfMainRecord == 0 {
-				err = errors.New("id is 0")
-			}
-			utils.Checkerr(err, r.sql)
-			if idOfMainRecord > 0 && err == nil {
-				//更新id自增长值
-				idSeqField := tableName + "_id_seq"
-				// SELECT setval('', (SELECT max(id) FROM tableName))
-				sqlIdSeq := "SELECT setval('" + idSeqField + "', (SELECT max(id) FROM " + tableName + "))"
-				db.Query(sqlIdSeq)
-			}
-
-			//执行附表操作
-			updateSetSql = ""
-			whereSql = ""
-			excludedFieldSet = set.New()
-			updatedFieldSet = set.New()
-			tableNameOther := ""
-			if r.ot.value != nil {
-				tableNameOther = r.ot.value[0]
-				tmp = 0
-				var fieldNames []string
-				var values []string
-				for key, value := range r.ot.columns {
-					var pro bool
-					r.ot.value[key+1], pro = ParseValue(r.ot.value[key+1])
-					if r.ot.value[key+1] == ":id" {
-						r.ot.value[key+1] = strconv.Itoa(idOfMainRecord)
-					}
-					if r.ot.value[key+1] != "" {
-						if value != "" {
-							fieldNames = append(fieldNames, value)
-							values = append(values, r.ot.value[key+1])
-							updatedFieldSet.Add(value)
-							if !pro {
-								excludedFieldSet.Add(value)
-							}
-							tmp++
-						}
-					}
-				}
-				insertSql, updateSetSql, whereSql = GetUpdateSql(driverName, tableNameOther, fieldNames, values,
-					needConflictOnFieldsOther, updatedFieldSet, excludedFieldSet)
-				r.ot.sql = insertSql
-				if needConflictOnFieldsOther != "" {
-					r.ot.sql += " ON CONFLICT (" + needConflictOnFieldsOther + ") DO UPDATE SET " +
-						updateSetSql + whereSql
-				}
-
-				db.QueryRow(r.ot.sql + ";")
-			}
-			fmt.Println("[" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) + "]导入数据成功")
-			sign <- "success"
-		}(i) //end of go func
+			db.QueryRow(r.ot.sql + ";")
+		}
+		fmt.Println("[" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) + "]导入数据成功")
+		//sign <- "success"
+		//}//end of go func
 	}
-	for i := dataStartRow - 1; i <= rowsNum; i++ {
-		<-sign
-	}
+	//for rowIndex := dataStartRow - 1; rowIndex <= rowsNum; rowIndex++ {
+	//	<-sign
+	//}
 	return
 }
 
@@ -371,23 +376,34 @@ func Substr(str string, start int, length int) string {
 	return string(rs[start:end])
 }
 
-func ConverExcelToDB(db *sql.DB,driverName, tableName ,excelFileName,sheets string,dataStartRow int) {
-	c, _ := GetColumns(db, driverName, tableName)
+func ConverExcelToDB(db *sql.DB, driverName, tableName, excelFileName, sheets string, dataStartRow int) {
 	xlFile, err := xlsx.OpenFile(excelFileName)
 	if err != nil {
 		utils.Checkerr(err, excelFileName)
 	}
 	sheetSlice := strings.Split(sheets, ",")
+	sign := make(chan string, len(sheetSlice))
 	for _, sheetIndex := range sheetSlice {
-		nIndex, err := strconv.Atoi(sheetIndex)
-		utils.Checkerr(err, "")
-		if nIndex >= len(xlFile.Sheets) {
-			fmt.Printf("Sheet index should small then length of sheets.sheet:%d, len(xlFile.Sheets):%d\n", sheetIndex, len(xlFile.Sheets))
-			return
-		}
-		sheet_ := xlFile.Sheets[nIndex]
-		fmt.Printf("--------sheet%s, %s----------\n", sheetIndex, sheet_.Name)
-		err = Convert(c, sheet_, db, dataStartRow, driverName, tableName)
-		utils.Checkerr(err, fmt.Sprintf("sheetIndex:%d", nIndex))
+		go func(sheetIndex string) {
+			c, _ := GetColumns(db, driverName, tableName)
+			nIndex, err := strconv.Atoi(sheetIndex)
+			utils.Checkerr(err, "")
+			if nIndex >= len(xlFile.Sheets) {
+				fmt.Printf("Sheet index should small then length of sheets.sheetIndex:%d, "+
+					"len(xlFile.Sheets):%d\n", sheetIndex, len(xlFile.Sheets))
+				return
+			}
+			sheet_ := xlFile.Sheets[nIndex]
+			fmt.Printf("--------sheetIndex%s, %s----------\n", sheetIndex, sheet_.Name)
+			err = Convert(c, sheet_, db, dataStartRow, driverName, tableName)
+			if utils.Checkerr2(err, fmt.Sprintf("sheetIndex:%d", nIndex)) {
+				sign <- "error"
+			} else {
+				sign <- "success"
+			}
+		}(sheetIndex)
+	}
+	for sheetIndex := dataStartRow - 1; sheetIndex <= len(sheetSlice); sheetIndex++ {
+		<-sign
 	}
 }
