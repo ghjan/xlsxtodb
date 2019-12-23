@@ -58,7 +58,7 @@ func Convert(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driver
 		updateSetSql := ""
 		whereSql := ""
 		//var excludedFields []string
-		var ids string
+		id := ""
 		excludedFieldSet := set.New()
 		updatedFieldSet := set.New()
 		var uniqTogetherMap = map[string]string{}
@@ -92,17 +92,16 @@ func Convert(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driver
 				if len(value) > 1 {
 					switch value[1] {
 					case "unique":
-						uniqueSql := "SELECT group_concat(id) as ids, count(" + value[0] + ") as has FROM  " +
+						if id != "" {
+							continue
+						}
+						uniqueSql := "SELECT id, " + value[0] + " FROM  " +
 							utils.EscapeString(driverName, tableName) + "  WHERE  " + value[0] + "  = '" +
 							utils.EscapeSpecificChar(r.value[value[0]]) + "'"
 						//fmt.Printf("uniqueSql:%s\n", uniqueSql)
 						result, _ := utils.FetchRow(db, uniqueSql)
-						has, _ := strconv.Atoi((*result)["has"])
-						ids = (*result)["ids"]
-						if ids != "" && ids != "{}" {
-							ids = strings.TrimSuffix(strings.TrimPrefix(ids, "{"), "}")
-						}
-						if has > 0 {
+						id = (*result)["id"]
+						if id != "" {
 							if needConflictOnFields == "" {
 								needConflictOnFields = value[0]
 							} else {
@@ -185,8 +184,8 @@ func Convert(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driver
 		idOfMainRecord := int(r.insertID)
 		if idOfMainRecord == 0 {
 			fmt.Println(r.sql)
-			if ids != "" {
-				idOfMainRecord, _ = strconv.Atoi(strings.Split(ids, ",")[0])
+			if id != "" {
+				idOfMainRecord, _ = strconv.Atoi(id)
 			} else if len(uniqTogetherMap) > 0 {
 				uniqTogetherSql := " select id from " + tableName + " where "
 				indexTemp := 0

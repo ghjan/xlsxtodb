@@ -33,7 +33,7 @@
 ### v0.2.0
 支持多种数据库mysql, postgres
 支持多个sheets
-
+go get -u -v github.com/ghjan/xlsxtodb@v0.2.0
 ### v0.1.2
 fork from https://github.com/TargetLiu/xlsxtomysql
 修复bug
