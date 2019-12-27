@@ -53,7 +53,7 @@ func Convert(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driver
 		r := &Row{value: make(map[string]string), sql: "", ot: OtherTable{}}
 		tmp := 0
 		// 字段
-		var fieldNames []string               //INSERT INTO ()
+		var insertIntoFieldNames []string     //INSERT INTO ()
 		needConflictOnFields := ""            //CONFLICT ON()
 		distinctExcludedFieldSet := set.New() //where tbl.c3 is distinct from excluded.c3 or tbl.c4 is distinct from excluded.c4
 		updatedFieldSet := set.New()          // DO UPDATE SET
@@ -65,6 +65,7 @@ func Convert(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driver
 		whereSql := ""
 		//var excludedFields []string
 		id := ""
+		returningFields := []string{"id"}
 		var rows *sql.Rows
 		var uniqTogetherMap = map[string]string{}
 		for key, columnFieldValues := range c.useColumns {
@@ -99,9 +100,10 @@ func Convert(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driver
 					case "generate":
 						if columnFieldValues[0] == "uuid" {
 							r.value[columnFieldValues[0]] = uuid.New().String()
-
+							returningFields = append(returningFields, columnFieldValues[0])
 						} else if columnFieldValues[0] == "short_uuid" {
 							r.value[columnFieldValues[0]] = shortuuid.New()
+							returningFields = append(returningFields, columnFieldValues[0])
 						} else {
 							msg := fmt.Sprintf("columnFieldValues:%#v", columnFieldValues)
 							//fmt.Println(msg)
@@ -138,7 +140,8 @@ func Convert(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driver
 						if len(tmpvalue) == 2 {
 							if []byte(tmpvalue[1])[0] == ':' {
 								if _, ok := r.value[string([]byte(tmpvalue[1])[1:])]; ok {
-									r.value[columnFieldValues[0]] = tmpvalue[0] + r.value[string([]byte(tmpvalue[1])[1:])]
+									r.value[columnFieldValues[0]] = tmpvalue[0] +
+										r.value[string([]byte(tmpvalue[1])[1:])]
 								} else {
 									msg := "[" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) +
 										"]密码盐" + string([]byte(tmpvalue[1])[1:]) + "字段不存在，自动跳过"
@@ -161,11 +164,14 @@ func Convert(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driver
 							r.value[columnFieldValues[0]] = string(pass)
 						}
 					case "find":
-						result, _ := utils.FetchRow(db, "SELECT  "+columnFieldValues[3]+"  FROM  "+utils.EscapeString(driverName, columnFieldValues[2])+"  WHERE "+columnFieldValues[4]+" = '"+r.value[columnFieldValues[0]]+"'")
+						result, _ := utils.FetchRow(db, "SELECT  "+columnFieldValues[3]+"  FROM  "+
+							utils.EscapeString(driverName, columnFieldValues[2])+"  WHERE "+columnFieldValues[4]+
+							" = '"+r.value[columnFieldValues[0]]+"'")
 						if (*result)["id"] == "" {
 							//sign <- "error"
 							msg := "[" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) + "]表 " +
-								columnFieldValues[2] + " 中没有找到 " + columnFieldValues[4] + " 为 " + r.value[columnFieldValues[0]] + " 的数据，自动跳过"
+								columnFieldValues[2] + " 中没有找到 " + columnFieldValues[4] + " 为 " +
+								r.value[columnFieldValues[0]] + " 的数据，自动跳过"
 							//fmt.Println(msg)
 							err = errors.New(msg)
 							return
@@ -179,7 +185,7 @@ func Convert(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driver
 				r.value[columnFieldValues[0]], pro = ParseValue(r.value[columnFieldValues[0]])
 
 				if r.value[columnFieldValues[0]] != "" {
-					fieldNames = append(fieldNames, columnFieldValues[0])
+					insertIntoFieldNames = append(insertIntoFieldNames, columnFieldValues[0])
 					values = append(values, utils.EscapeValuesString(driverName, r.value[columnFieldValues[0]]))
 					updatedFieldSet.Add(columnFieldValues[0])
 					if !pro {
@@ -190,12 +196,32 @@ func Convert(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driver
 			}
 		}
 
-		//for _, columnFieldValues := range c.tableColumnMap {
-		//	if columnFieldValues != "" && NeedGenerateFieldSet.Has(columnFieldValues) {
-		//		c.useColumns[key] = columnval
-		//	}
-		//}
-		insertSql, updateSetSql, whereSql := GetUpdateSql(driverName, tableName, fieldNames, values,
+		if id == "" && len(uniqTogetherMap) > 0 {
+			uniqTogetherSql := " select " + strings.Join(returningFields, ",") + " from " + tableName + " where "
+			indexTemp := 0
+			for field, value := range uniqTogetherMap {
+				if indexTemp > 0 {
+					uniqTogetherSql += " and "
+				}
+				uniqTogetherSql += field + "=" + utils.EscapeValuesString(driverName, value)
+				indexTemp += 1
+			}
+			result, _ := utils.FetchRow(db, uniqTogetherSql)
+			for _, fieldReturning := range returningFields {
+				if fieldReturning == "id" {
+					id = (*result)["id"]
+				} else { // 如果没有值，就需要update
+					if (*result)[fieldReturning] == "" || (*result)[fieldReturning] == "NULL" {
+						updatedFieldSet.Add(fieldReturning)
+						distinctExcludedFieldSet.Add(fieldReturning)
+					} else {
+						updatedFieldSet.Remove(fieldReturning)
+						distinctExcludedFieldSet.Remove(fieldReturning)
+					}
+				}
+			}
+		}
+		insertSql, updateSetSql, whereSql := GetUpdateSql(driverName, tableName, insertIntoFieldNames, values,
 			needConflictOnFields, updatedFieldSet, distinctExcludedFieldSet)
 		r.sql = insertSql
 		if needConflictOnFields != "" && updateSetSql != "" && whereSql != "" {
@@ -206,6 +232,9 @@ func Convert(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driver
 		rows, err = db.Query(r.sql + ";")
 		if err == nil {
 			rows.Scan(&r.insertID)
+		} else {
+			fmt.Printf("err:%s\n", err.Error())
+			fmt.Printf("r.sql:%s\n", r.sql)
 		}
 		rows.Close()
 
@@ -214,21 +243,6 @@ func Convert(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driver
 			fmt.Println(r.sql)
 			if id != "" {
 				idOfMainRecord, _ = strconv.Atoi(id)
-			} else if len(uniqTogetherMap) > 0 {
-				uniqTogetherSql := " select id from " + tableName + " where "
-				indexTemp := 0
-				for field, value := range uniqTogetherMap {
-					if indexTemp > 0 {
-						uniqTogetherSql += " and "
-					}
-					uniqTogetherSql += field + "=" + utils.EscapeValuesString(driverName, value)
-					indexTemp += 1
-				}
-				result, _ := utils.FetchRow(db, uniqTogetherSql)
-				id := (*result)["id"]
-				if id != "" {
-					idOfMainRecord, _ = strconv.Atoi(id)
-				}
 			}
 		}
 		if idOfMainRecord == 0 {
@@ -298,7 +312,8 @@ func Convert(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driver
 }
 
 func GetUpdateSql(driverName, tableName string, fieldNames []string, values []string, needConflictOnFields string,
-	updatedFieldSet *set.StringSet, distinctExcludedFieldSet *set.StringSet) (sql string, updateSetSql string, whereSql string) {
+	updatedFieldSet *set.StringSet, distinctExcludedFieldSet *set.StringSet) (sql string,
+	updateSetSql string, whereSql string) {
 	sql = "INSERT INTO  " + utils.EscapeString(driverName, tableName)
 	sql += " (" + strings.Join(fieldNames, ",") + ")"
 	sql += " VALUES (" + strings.Join(values, ",") + ")"
@@ -379,7 +394,8 @@ func ParseValue(val string) (result string, processed bool) {
 		result = strconv.Itoa(int(time.Now().Unix()))
 		processed = true
 	case ":random":
-		result = strings.Replace(Substr(base64.StdEncoding.EncodeToString(utils.Krand(32, utils.KC_RAND_KIND_ALL)), 0, 32), "+/", "_-", -1)
+		result = strings.Replace(Substr(base64.StdEncoding.EncodeToString(utils.Krand(32,
+			utils.KC_RAND_KIND_ALL)), 0, 32), "+/", "_-", -1)
 		processed = true
 	default:
 		result = val
