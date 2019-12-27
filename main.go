@@ -81,7 +81,7 @@ func connectDB() *sql.DB {
 	err = db.Ping()
 	utils.Checkerr(err, driverName+","+dsn)
 	db.SetMaxOpenConns(100)
-	db.SetMaxIdleConns(100)
+	db.SetMaxIdleConns(30)
 	return db
 }
 

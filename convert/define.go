@@ -7,9 +7,9 @@ import (
 
 //列
 type Columns struct {
-	xlsxColumns    []*xlsx.Cell
-	tableColumnMap map[int]string
-	useColumns     map[int][]string
+	xlsxColumns    []*xlsx.Cell     //xlsx中的列
+	tableColumnMap map[int]string   //db中的列
+	useColumns     map[int][]string // 把xlsx中的列做解析 每个列名split为一个数组
 }
 
 //行
@@ -29,8 +29,11 @@ type OtherTable struct {
 
 var (
 	NeedNotUpdateFieldSet *set.StringSet
+	NeedGenerateFieldSet  *set.StringSet
 )
 
 func init() {
 	NeedNotUpdateFieldSet = set.NewFromSlice([]string{"created_at", "created", "created_on"})
+	NeedGenerateFieldSet = set.NewFromSlice([]string{"uuid", "short_uuid",})
+
 }
