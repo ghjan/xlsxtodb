@@ -2,14 +2,25 @@ package convert
 
 import (
 	"github.com/ghjan/xlsxtodb/pkg/set"
-	"github.com/tealeg/xlsx"
 )
+
+type StringValueInterface interface {
+	String() string
+}
+
+type StringValue struct {
+	Value string
+}
+
+func (sv StringValue) String() string {
+	return sv.Value
+}
 
 //列
 type Columns struct {
-	xlsxColumns    []*xlsx.Cell     //xlsx中的列
-	tableColumnMap map[int]string   //db中的列
-	useColumns     map[int][]string // 把xlsx中的列做解析 每个列名split为一个数组
+	sourceColumns  []StringValueInterface //xlsx/json中的列
+	tableColumnMap map[int]string         //db中的列
+	useColumns     map[int][]string       // 把xlsx中的列做解析 每个列名split为一个数组
 }
 
 //行

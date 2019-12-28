@@ -91,6 +91,6 @@ func main() {
 	db := connectDB()
 
 	defer db.Close()
-	convert.ConverExcelToDB(db, driverName, tableName, excelFileName, sheets, dataStartRow)
+	convert.ConvertExcelToDB(db, driverName, tableName, excelFileName, sheets, dataStartRow)
 
 }
