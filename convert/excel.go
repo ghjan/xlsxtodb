@@ -15,7 +15,7 @@ import (
 	"strings"
 )
 
-func ConvertFromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driverName,
+func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driverName,
 	tableName string) (err error) {
 	err = nil
 	if sheet.Rows == nil {
@@ -26,13 +26,12 @@ func ConvertFromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow in
 		c.sourceColumns = append(c.sourceColumns, cell)
 	}
 
-	c.ParaseColumns()
+	c.ParseColumns()
 	//ch := make(chan int, 50)
 	rowsNum := len(sheet.Rows) //- dataStartRow + 2
 	for rowIndex := dataStartRow - 1; rowIndex < rowsNum; rowIndex++ {
-		//ch <- rowIndex
-		utils.Checkerr(err, "")
-		r := &Row{value: make(map[string]string), sql: "", ot: OtherTable{}}
+		//utils.Checkerr(err, "")
+		dbRow := &DBRow{value: make(map[string]string), sql: "", ot: OtherTable{}}
 		tmp := 0
 		// 字段
 		var insertIntoFieldNames []string     //INSERT INTO ()
@@ -56,17 +55,17 @@ func ConvertFromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow in
 				continue
 			}
 			if key >= len(sheet.Rows[rowIndex].Cells) || sheet.Rows[rowIndex].Cells[key] == nil {
-				r.value[columnFieldValues[0]] = ""
+				dbRow.value[columnFieldValues[0]] = ""
 			} else {
-				r.value[columnFieldValues[0]] = sheet.Rows[rowIndex].Cells[key].String()
+				dbRow.value[columnFieldValues[0]] = sheet.Rows[rowIndex].Cells[key].String()
 			}
 			//解析内容
 			if columnFieldValues[0] == ":other" {
-				r.ot.value = strings.Split(r.value[columnFieldValues[0]], "|")
-				sqlOther := "SELECT * FROM " + utils.EscapeString(driverName, r.ot.value[0])
+				dbRow.ot.value = strings.Split(dbRow.value[columnFieldValues[0]], "|")
+				sqlOther := "SELECT * FROM " + utils.EscapeString(driverName, dbRow.ot.value[0])
 				rows, err = db.Query(sqlOther)
 				utils.Checkerr(err, sqlOther)
-				r.ot.columns, err = rows.Columns()
+				dbRow.ot.columns, err = rows.Columns()
 				rows.Close()
 				utils.Checkerr(err, sqlOther)
 
@@ -81,10 +80,10 @@ func ConvertFromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow in
 					switch columnFieldValues[1] {
 					case "generate":
 						if columnFieldValues[0] == "uuid" {
-							r.value[columnFieldValues[0]] = uuid.New().String()
+							dbRow.value[columnFieldValues[0]] = uuid.New().String()
 							returningFields = append(returningFields, columnFieldValues[0])
 						} else if columnFieldValues[0] == "short_uuid" {
-							r.value[columnFieldValues[0]] = shortuuid.New()
+							dbRow.value[columnFieldValues[0]] = shortuuid.New()
 							returningFields = append(returningFields, columnFieldValues[0])
 						} else {
 							msg := fmt.Sprintf("columnFieldValues:%#v", columnFieldValues)
@@ -99,7 +98,7 @@ func ConvertFromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow in
 						}
 						uniqueSql := "SELECT id, " + columnFieldValues[0] + " FROM  " +
 							utils.EscapeString(driverName, tableName) + "  WHERE  " + columnFieldValues[0] + "  = '" +
-							utils.EscapeSpecificChar(r.value[columnFieldValues[0]]) + "'"
+							utils.EscapeSpecificChar(dbRow.value[columnFieldValues[0]]) + "'"
 						//fmt.Printf("uniqueSql:%s\n", uniqueSql)
 						result, _ := utils.FetchRow(db, uniqueSql)
 						id = (*result)["id"]
@@ -111,19 +110,19 @@ func ConvertFromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow in
 							}
 						}
 					case "uniq_together":
-						uniqTogetherMap[columnFieldValues[0]] = utils.EscapeSpecificChar(r.value[columnFieldValues[0]])
+						uniqTogetherMap[columnFieldValues[0]] = utils.EscapeSpecificChar(dbRow.value[columnFieldValues[0]])
 						if needConflictOnFields == "" {
 							needConflictOnFields = columnFieldValues[0]
 						} else {
 							needConflictOnFields += "," + columnFieldValues[0]
 						}
 					case "password":
-						tmpvalue := strings.Split(r.value[columnFieldValues[0]], "|")
+						tmpvalue := strings.Split(dbRow.value[columnFieldValues[0]], "|")
 						if len(tmpvalue) == 2 {
 							if []byte(tmpvalue[1])[0] == ':' {
-								if _, ok := r.value[string([]byte(tmpvalue[1])[1:])]; ok {
-									r.value[columnFieldValues[0]] = tmpvalue[0] +
-										r.value[string([]byte(tmpvalue[1])[1:])]
+								if _, ok := dbRow.value[string([]byte(tmpvalue[1])[1:])]; ok {
+									dbRow.value[columnFieldValues[0]] = tmpvalue[0] +
+										dbRow.value[string([]byte(tmpvalue[1])[1:])]
 								} else {
 									msg := "[" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) +
 										"]密码盐" + string([]byte(tmpvalue[1])[1:]) + "字段不存在，自动跳过"
@@ -133,42 +132,42 @@ func ConvertFromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow in
 									return
 								}
 							} else {
-								r.value[columnFieldValues[0]] += tmpvalue[1]
+								dbRow.value[columnFieldValues[0]] += tmpvalue[1]
 							}
 						} else {
-							r.value[columnFieldValues[0]] = tmpvalue[0]
+							dbRow.value[columnFieldValues[0]] = tmpvalue[0]
 						}
 						switch columnFieldValues[2] {
 						case "md5":
-							r.value[columnFieldValues[0]] = string(md5.New().Sum([]byte(r.value[columnFieldValues[0]])))
+							dbRow.value[columnFieldValues[0]] = string(md5.New().Sum([]byte(dbRow.value[columnFieldValues[0]])))
 						case "bcrypt":
-							pass, _ := bcrypt.GenerateFromPassword([]byte(r.value[columnFieldValues[0]]), 13)
-							r.value[columnFieldValues[0]] = string(pass)
+							pass, _ := bcrypt.GenerateFromPassword([]byte(dbRow.value[columnFieldValues[0]]), 13)
+							dbRow.value[columnFieldValues[0]] = string(pass)
 						}
 					case "find":
 						result, _ := utils.FetchRow(db, "SELECT  "+columnFieldValues[3]+"  FROM  "+
 							utils.EscapeString(driverName, columnFieldValues[2])+"  WHERE "+columnFieldValues[4]+
-							" = '"+r.value[columnFieldValues[0]]+"'")
+							" = '"+dbRow.value[columnFieldValues[0]]+"'")
 						if (*result)["id"] == "" {
 							//sign <- "error"
 							msg := "[" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) + "]表 " +
 								columnFieldValues[2] + " 中没有找到 " + columnFieldValues[4] + " 为 " +
-								r.value[columnFieldValues[0]] + " 的数据，自动跳过"
+								dbRow.value[columnFieldValues[0]] + " 的数据，自动跳过"
 							//fmt.Println(msg)
 							err = errors.New(msg)
 							return
 						}
 						distinctExcludedFieldSet.Add(columnFieldValues[0])
 						updatedFieldSet.Add(columnFieldValues[0])
-						r.value[columnFieldValues[0]] = (*result)["id"]
+						dbRow.value[columnFieldValues[0]] = (*result)["id"]
 					}
 				}
 				var pro bool
-				r.value[columnFieldValues[0]], pro = ParseValue(r.value[columnFieldValues[0]])
+				dbRow.value[columnFieldValues[0]], pro = ParseValue(dbRow.value[columnFieldValues[0]])
 
-				if r.value[columnFieldValues[0]] != "" {
+				if dbRow.value[columnFieldValues[0]] != "" {
 					insertIntoFieldNames = append(insertIntoFieldNames, columnFieldValues[0])
-					values = append(values, utils.EscapeValuesString(driverName, r.value[columnFieldValues[0]]))
+					values = append(values, utils.EscapeValuesString(driverName, dbRow.value[columnFieldValues[0]]))
 					updatedFieldSet.Add(columnFieldValues[0])
 					if !pro {
 						distinctExcludedFieldSet.Add(columnFieldValues[0])
@@ -205,24 +204,24 @@ func ConvertFromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow in
 		}
 		insertSql, updateSetSql, whereSql := GetUpdateSql(driverName, tableName, insertIntoFieldNames, values,
 			needConflictOnFields, updatedFieldSet, distinctExcludedFieldSet)
-		r.sql = insertSql
+		dbRow.sql = insertSql
 		if needConflictOnFields != "" && updateSetSql != "" && whereSql != "" {
-			r.sql += " ON CONFLICT (" + needConflictOnFields + ") DO UPDATE SET " +
+			dbRow.sql += " ON CONFLICT (" + needConflictOnFields + ") DO UPDATE SET " +
 				updateSetSql + whereSql
 		}
-		r.sql += " RETURNING id"
-		rows, err = db.Query(r.sql + ";")
+		dbRow.sql += " RETURNING id"
+		rows, err = db.Query(dbRow.sql + ";")
 		if err == nil {
-			rows.Scan(&r.insertID)
+			rows.Scan(&dbRow.insertID)
 		} else {
 			fmt.Printf("err:%s\n", err.Error())
-			fmt.Printf("r.sql:%s\n", r.sql)
+			fmt.Printf("dbRow.sql:%s\n", dbRow.sql)
 		}
 		rows.Close()
 
-		idOfMainRecord := int(r.insertID)
+		idOfMainRecord := int(dbRow.insertID)
 		if idOfMainRecord == 0 {
-			fmt.Println(r.sql)
+			fmt.Println(dbRow.sql)
 			if id != "" {
 				idOfMainRecord, _ = strconv.Atoi(id)
 			}
@@ -231,7 +230,7 @@ func ConvertFromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow in
 			err = errors.New("id is 0")
 			return
 		}
-		utils.Checkerr(err, r.sql)
+		utils.Checkerr(err, dbRow.sql)
 		if idOfMainRecord > 0 && err == nil {
 			//更新id自增长值
 			idSeqField := tableName + "_id_seq"
@@ -248,21 +247,21 @@ func ConvertFromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow in
 		distinctExcludedFieldSet = set.New()
 		updatedFieldSet = set.New()
 		tableNameOther := ""
-		if r.ot.value != nil {
-			tableNameOther = r.ot.value[0]
+		if dbRow.ot.value != nil {
+			tableNameOther = dbRow.ot.value[0]
 			tmp = 0
 			var fieldNames []string
 			var values []string
-			for key, value := range r.ot.columns {
+			for key, value := range dbRow.ot.columns {
 				var pro bool
-				r.ot.value[key+1], pro = ParseValue(r.ot.value[key+1])
-				if r.ot.value[key+1] == ":id" {
-					r.ot.value[key+1] = strconv.Itoa(idOfMainRecord)
+				dbRow.ot.value[key+1], pro = ParseValue(dbRow.ot.value[key+1])
+				if dbRow.ot.value[key+1] == ":id" {
+					dbRow.ot.value[key+1] = strconv.Itoa(idOfMainRecord)
 				}
-				if r.ot.value[key+1] != "" {
+				if dbRow.ot.value[key+1] != "" {
 					if value != "" {
 						fieldNames = append(fieldNames, value)
-						values = append(values, r.ot.value[key+1])
+						values = append(values, dbRow.ot.value[key+1])
 						updatedFieldSet.Add(value)
 						if !pro {
 							distinctExcludedFieldSet.Add(value)
@@ -273,14 +272,14 @@ func ConvertFromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow in
 			}
 			insertSql, updateSetSql, whereSql = GetUpdateSql(driverName, tableNameOther, fieldNames, values,
 				needConflictOnFieldsOther, updatedFieldSet, distinctExcludedFieldSet)
-			r.ot.sql = insertSql
+			dbRow.ot.sql = insertSql
 			if needConflictOnFieldsOther != "" {
-				r.ot.sql += " ON CONFLICT (" + needConflictOnFieldsOther + ") DO UPDATE SET " +
+				dbRow.ot.sql += " ON CONFLICT (" + needConflictOnFieldsOther + ") DO UPDATE SET " +
 					updateSetSql + whereSql
 			}
-			rows, err := db.Query(r.ot.sql + ";")
+			rows, err := db.Query(dbRow.ot.sql + ";")
 			rows.Close()
-			utils.Checkerr(err, r.ot.sql)
+			utils.Checkerr(err, dbRow.ot.sql)
 
 		}
 		fmt.Println("[" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) + "]导入数据成功")
@@ -293,7 +292,7 @@ func ConvertFromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow in
 	return
 }
 
-func ConvertExcelToDB(db *sql.DB, driverName, tableName, excelFileName, sheets string, dataStartRow int) {
+func ExcelToDB(db *sql.DB, driverName, tableName, excelFileName, sheets string, dataStartRow int) {
 	xlFile, err := xlsx.OpenFile(excelFileName)
 	if err != nil {
 		utils.Checkerr(err, excelFileName)
@@ -313,7 +312,7 @@ func ConvertExcelToDB(db *sql.DB, driverName, tableName, excelFileName, sheets s
 			}
 			sheet_ := xlFile.Sheets[nIndex]
 			fmt.Printf("--------sheetIndex%s, %s----------\n", sheetIndex, sheet_.Name)
-			err = ConvertFromExcel(c, sheet_, db, dataStartRow, driverName, tableName)
+			err = FromExcel(c, sheet_, db, dataStartRow, driverName, tableName)
 			if err != nil && utils.Checkerr2(err, fmt.Sprintf("sheetIndex:%d", nIndex)) {
 				msg := "error"
 				if err != nil {

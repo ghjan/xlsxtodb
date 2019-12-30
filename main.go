@@ -24,6 +24,8 @@ var (
 
 	//对应的excel文件名
 	excelFileName string
+	//对应的json文件名
+	jsonFileName string
 	//对应的excel sheet index, begin from 0
 	sheets string
 	//对应的excel dataStartRow, begin from 1
@@ -53,12 +55,15 @@ func init() {
 	flag.StringVar(&host, "h", "127.0.0.1", "主机名,默认 127.0.0.1")
 	flag.StringVar(&port, "P", "3306", "端口号,3306")
 	flag.StringVar(&dbname, "d", "", "数据库名称")
+	flag.StringVar(&jsonFileName, "json", "", "json 对应的json文件名")
 
 	// 从arguments中解析注册的flag。必须在所有flag都注册好而未访问其值时执行。未注册却使用flag -help时，会返回ErrHelp。
 	flag.Parse()
 	// 打印
-	if driverName == "" || tableName == "" || excelFileName == "" || (dsn == "" && (username == "" || host == "" || port == "" || dbname == "" || sheets == "")) {
-		fmt.Println("请按照格式输入：xlsxtodb -driver [mysql/postgres] -dsn [DSN] -table [tablename] -excel [xlsx文件名] -sheets [sheetIndex,sheetIndex] -u username -p password -h host -P port -d databasename")
+	if driverName == "" || tableName == "" || ((excelFileName == "" || sheets == "") && jsonFileName == "") ||
+		(dsn == "" && (username == "" || host == "" || port == "" || dbname == "")) {
+		fmt.Println("请按照格式输入（excel-》db)：xlsxtodb -driver [mysql/postgres] -dsn [DSN] -table [tablename] -excel [xlsx文件名] -sheets [sheetIndex,sheetIndex] -u username -p password -h host -P port -d databasename")
+		fmt.Println("或者（json-》db)：xlsxtodb -driver [mysql/postgres] -dsn [DSN] -table [tablename] -json [json文件名]  -u username -p password -h host -P port -d databasename")
 		os.Exit(-1)
 	}
 	if dsn == "" {
@@ -71,12 +76,17 @@ func init() {
 
 		}
 	}
-	fmt.Printf("driverName=%v dsn=%v table=%v excel=%v\n", driverName, dsn, tableName, excelFileName)
+	if excelFileName != "" {
+		fmt.Printf("driverName=%v dsn=%v table=%v excel=%v\n", driverName, dsn, tableName, excelFileName)
+	} else {
+		fmt.Printf("driverName=%v dsn=%v table=%v json=%v\n", driverName, dsn, tableName, jsonFileName)
+
+	}
 
 }
 func connectDB() *sql.DB {
 	db, err := sql.Open(driverName, dsn)
-	utils.Checkerr(err, driverName+","+dsn)
+	utils.Checkerr(err, "sql.Open(driverName, dsn),"+driverName+","+dsn)
 
 	err = db.Ping()
 	utils.Checkerr(err, driverName+","+dsn)
@@ -91,6 +101,10 @@ func main() {
 	db := connectDB()
 
 	defer db.Close()
-	convert.ConvertExcelToDB(db, driverName, tableName, excelFileName, sheets, dataStartRow)
+	if (excelFileName != "") {
+		convert.ExcelToDB(db, driverName, tableName, excelFileName, sheets, dataStartRow)
+	} else {
+		convert.JsonToDB(db, driverName, tableName, jsonFileName, nil)
+	}
 
 }

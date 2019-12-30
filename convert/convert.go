@@ -64,7 +64,7 @@ func GetUpdateSql(driverName, tableName string, fieldNames []string, values []st
 }
 
 //解析Excel及数据库字段
-func (c *Columns) ParaseColumns() {
+func (c *Columns) ParseColumns() {
 	c.useColumns = make(map[int][]string)
 	hitTableColumnSet := set.New()
 	allTableColmnSet := set.New()
@@ -154,4 +154,3 @@ func Substr(str string, start int, length int) string {
 
 	return string(rs[start:end])
 }
-

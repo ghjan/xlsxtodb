@@ -23,8 +23,8 @@ type Columns struct {
 	useColumns     map[int][]string       // 把xlsx中的列做解析 每个列名split为一个数组
 }
 
-//行
-type Row struct {
+//数据库行
+type DBRow struct {
 	insertID int64
 	sql      string
 	value    map[string]string
