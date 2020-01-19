@@ -50,7 +50,6 @@ OutFor:
 		returningFields := []string{"id"}
 		var rows *sql.Rows
 		var uniqTogetherMap = map[string]string{}
-		uniqFieldsExsited := false
 		for key, columnFieldValues := range c.useColumns {
 			if columnFieldValues == nil || len(sheet.Rows) <= 0 {
 				fmt.Printf("c.useColumns:%#v\n", c.useColumns)
@@ -95,7 +94,6 @@ OutFor:
 							return
 						}
 					case "unique":
-						uniqFieldsExsited = true
 						if id != "" {
 							continue
 						}
@@ -118,7 +116,6 @@ OutFor:
 							}
 						}
 					case "uniq_together":
-						uniqFieldsExsited = true
 						uniqTogetherMap[columnFieldValues[0]] = utils.EscapeSpecificChar(dbRow.value[columnFieldValues[0]])
 						if needConflictOnFields == "" {
 							needConflictOnFields = columnFieldValues[0]
@@ -223,11 +220,6 @@ OutFor:
 			useUpdate = true
 		}
 		dbRow.sql += " RETURNING id"
-		if uniqFieldsExsited && whereSql == "" && updatedFieldSet.Len() > 0 {
-			fmt.Printf("[sheet"+sheetIndex+"-"+strconv.Itoa(rowIndex+1)+"/"+strconv.Itoa(rowsNum+1)+
-				"] FromExcel ignored:uniqFieldsExsited but whereSql is blank, dbRow.sql:%s\n", dbRow.sql)
-			continue
-		}
 		//var row *sql.Row
 		err = db.QueryRow(dbRow.sql + ";").Scan(&dbRow.insertID)
 		if err != nil || dbRow.insertID == 0 {
