@@ -15,8 +15,8 @@ import (
 	"strings"
 )
 
-func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driverName,
-	tableName string) (err error) {
+func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driverName, tableName string,
+	sheetIndex string) (err error) {
 	err = nil
 	if sheet.Rows == nil {
 		err = errors.New("该sheet没有数据")
@@ -49,6 +49,7 @@ func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driv
 		returningFields := []string{"id"}
 		var rows *sql.Rows
 		var uniqTogetherMap = map[string]string{}
+		uniqFieldsExsited := false
 		for key, columnFieldValues := range c.useColumns {
 			if columnFieldValues == nil || len(sheet.Rows) <= 0 {
 				fmt.Printf("c.useColumns:%#v\n", c.useColumns)
@@ -93,6 +94,7 @@ func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driv
 							return
 						}
 					case "unique":
+						uniqFieldsExsited = true
 						if id != "" {
 							continue
 						}
@@ -110,6 +112,7 @@ func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driv
 							}
 						}
 					case "uniq_together":
+						uniqFieldsExsited = true
 						uniqTogetherMap[columnFieldValues[0]] = utils.EscapeSpecificChar(dbRow.value[columnFieldValues[0]])
 						if needConflictOnFields == "" {
 							needConflictOnFields = columnFieldValues[0]
@@ -150,7 +153,7 @@ func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driv
 							" = '"+dbRow.value[columnFieldValues[0]]+"'")
 						if (*result)["id"] == "" {
 							//sign <- "error"
-							msg := "[" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) + "]表 " +
+							msg := "[sheet" + sheetIndex + "-" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) + "]表 " +
 								columnFieldValues[2] + " 中没有找到 " + columnFieldValues[4] + " 为 " +
 								dbRow.value[columnFieldValues[0]] + " 的数据，自动跳过"
 							fmt.Println(msg)
@@ -214,6 +217,11 @@ func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driv
 			useUpdate = true
 		}
 		dbRow.sql += " RETURNING id"
+		if uniqFieldsExsited && whereSql == "" {
+			fmt.Printf("[sheet" + sheetIndex + "-" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) +
+				"] FromExcel ignored:uniqFieldsExsited but whereSql is blank, dbRow.sql:%s\n", dbRow.sql)
+			continue
+		}
 		//var row *sql.Row
 		err = db.QueryRow(dbRow.sql + ";").Scan(&dbRow.insertID)
 		if err != nil || dbRow.insertID == 0 {
@@ -237,7 +245,7 @@ func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driv
 		}
 		utils.Checkerr(err, dbRow.sql)
 		if idOfMainRecord > 0 && err == nil {
-			//更新id自增长值
+			//更新id自增长值导入数据成功
 			idSeqField := tableName + "_id_seq"
 			// SELECT setval('', (SELECT max(id) FROM tableName))
 			sqlIdSeq := "SELECT setval('" + idSeqField + "', (SELECT max(id) FROM " + tableName + "))"
@@ -287,7 +295,7 @@ func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driv
 			utils.Checkerr(err, dbRow.ot.sql)
 
 		}
-		fmt.Println("[" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) + "]导入数据成功")
+		fmt.Println("[sheet" + sheetIndex + "-" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) + "]导入数据成功")
 		//sign <- "success"
 		//}//end of go func
 	}
@@ -317,7 +325,7 @@ func ExcelToDB(db *sql.DB, driverName, tableName, excelFileName, sheets string, 
 			}
 			sheet_ := xlFile.Sheets[nIndex]
 			fmt.Printf("--------sheetIndex%s, %s----------\n", sheetIndex, sheet_.Name)
-			err = FromExcel(c, sheet_, db, dataStartRow, driverName, tableName)
+			err = FromExcel(c, sheet_, db, dataStartRow, driverName, tableName, sheetIndex)
 			if err != nil && utils.Checkerr2(err, fmt.Sprintf("sheetIndex:%d", nIndex)) {
 				msg := "error"
 				if err != nil {
