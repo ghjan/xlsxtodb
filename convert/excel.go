@@ -29,6 +29,7 @@ func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driv
 	c.ParseColumns()
 	//ch := make(chan int, 50)
 	rowsNum := len(sheet.Rows) //- dataStartRow + 2
+OutFor:
 	for rowIndex := dataStartRow - 1; rowIndex < rowsNum; rowIndex++ {
 		//utils.Checkerr(err, "")
 		dbRow := &DBRow{value: make(map[string]string), sql: "", ot: OtherTable{}}
@@ -101,6 +102,11 @@ func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driv
 						uniqueSql := "SELECT id, " + columnFieldValues[0] + " FROM  " +
 							utils.EscapeString(driverName, tableName) + "  WHERE  " + columnFieldValues[0] + "  = '" +
 							utils.EscapeSpecificChar(dbRow.value[columnFieldValues[0]]) + "'"
+						if dbRow.value[columnFieldValues[0]] == "" {
+							fmt.Printf("[sheet"+sheetIndex+"-"+strconv.Itoa(rowIndex+1)+"/"+strconv.Itoa(rowsNum+1)+
+								"] FromExcel ignored:uniq field value is blank, uniqueSql:%s\n", uniqueSql)
+							continue OutFor
+						}
 						//fmt.Printf("uniqueSql:%s\n", uniqueSql)
 						result, _ := utils.FetchRow(db, uniqueSql)
 						id = (*result)["id"]
@@ -217,8 +223,8 @@ func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driv
 			useUpdate = true
 		}
 		dbRow.sql += " RETURNING id"
-		if uniqFieldsExsited && whereSql == "" {
-			fmt.Printf("[sheet" + sheetIndex + "-" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) +
+		if uniqFieldsExsited && whereSql == "" && updatedFieldSet.Len() > 0 {
+			fmt.Printf("[sheet"+sheetIndex+"-"+strconv.Itoa(rowIndex+1)+"/"+strconv.Itoa(rowsNum+1)+
 				"] FromExcel ignored:uniqFieldsExsited but whereSql is blank, dbRow.sql:%s\n", dbRow.sql)
 			continue
 		}
