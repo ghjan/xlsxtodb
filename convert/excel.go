@@ -212,14 +212,12 @@ func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driv
 				updateSetSql + whereSql
 		}
 		dbRow.sql += " RETURNING id"
-		rows, err = db.Query(dbRow.sql + ";")
-		if err == nil {
-			rows.Scan(&dbRow.insertID)
-		} else {
+		//var row *sql.Row
+		err = db.QueryRow(dbRow.sql + ";").Scan(&dbRow.insertID)
+		if err != nil || dbRow.insertID == 0 {
 			fmt.Printf("err:%s\n", err.Error())
 			fmt.Printf("dbRow.sql:%s\n", dbRow.sql)
 		}
-		rows.Close()
 
 		idOfMainRecord := int(dbRow.insertID)
 		if idOfMainRecord == 0 {
