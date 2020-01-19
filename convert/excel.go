@@ -207,18 +207,29 @@ func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driv
 		insertSql, updateSetSql, whereSql := GetUpdateSql(driverName, tableName, insertIntoFieldNames, values,
 			needConflictOnFields, updatedFieldSet, distinctExcludedFieldSet)
 		dbRow.sql = insertSql
+		useQueryRow := true
 		if needConflictOnFields != "" && updateSetSql != "" && whereSql != "" {
 			dbRow.sql += " ON CONFLICT (" + needConflictOnFields + ") DO UPDATE SET " +
 				updateSetSql + whereSql
+			useQueryRow = false
 		}
 		dbRow.sql += " RETURNING id"
 		//var row *sql.Row
-		err = db.QueryRow(dbRow.sql + ";").Scan(&dbRow.insertID)
-		if err != nil || dbRow.insertID == 0 {
-			fmt.Printf("err:%s\n", err.Error())
-			fmt.Printf("dbRow.sql:%s\n", dbRow.sql)
+		if useQueryRow {
+			err = db.QueryRow(dbRow.sql + ";").Scan(&dbRow.insertID)
+			if err != nil || dbRow.insertID == 0 {
+				fmt.Printf("err:%s\n", err.Error())
+				fmt.Printf("dbRow.sql:%s\n", dbRow.sql)
+			}
+		} else {
+			rows, err = db.Query(dbRow.sql + ";")
+			if err != nil {
+				fmt.Printf("err:%s\n", err.Error())
+				fmt.Printf("dbRow.sql:%s\n", dbRow.sql)
+			} else {
+				rows.Scan(&dbRow.insertID)
+			}
 		}
-
 		idOfMainRecord := int(dbRow.insertID)
 		if idOfMainRecord == 0 {
 			fmt.Println(dbRow.sql)
