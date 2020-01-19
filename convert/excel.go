@@ -153,9 +153,11 @@ func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driv
 							msg := "[" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) + "]表 " +
 								columnFieldValues[2] + " 中没有找到 " + columnFieldValues[4] + " 为 " +
 								dbRow.value[columnFieldValues[0]] + " 的数据，自动跳过"
-							//fmt.Println(msg)
-							err = errors.New(msg)
-							return
+							fmt.Println(msg)
+							//有的数据不合法 跳过就可以 不必停止处理其它数据
+							continue
+							//err = errors.New(msg)
+							//return
 						}
 						distinctExcludedFieldSet.Add(columnFieldValues[0])
 						updatedFieldSet.Add(columnFieldValues[0])
