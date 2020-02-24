@@ -161,13 +161,23 @@ OutFor:
 								dbRow.value[columnFieldValues[0]] + " 的数据，自动跳过"
 							fmt.Println(msg)
 							//有的数据不合法 跳过就可以 不必停止处理其它数据
-							continue
+							continue OutFor
 							//err = errors.New(msg)
 							//return
 						}
 						distinctExcludedFieldSet.Add(columnFieldValues[0])
 						updatedFieldSet.Add(columnFieldValues[0])
 						dbRow.value[columnFieldValues[0]] = (*result)["id"]
+					}
+
+					switch columnFieldValues[len(columnFieldValues)-1] {
+					case "uniq_together":
+						uniqTogetherMap[columnFieldValues[0]] = utils.EscapeSpecificChar(dbRow.value[columnFieldValues[0]])
+						if needConflictOnFields == "" {
+							needConflictOnFields = columnFieldValues[0]
+						} else {
+							needConflictOnFields += "," + columnFieldValues[0]
+						}
 					}
 				}
 				var pro bool
