@@ -195,9 +195,8 @@ OutFor:
 				}
 			}
 		}
-
-		if id != "" {
-			var result *map[string]string
+		var result *map[string]string
+		if id == "" {
 			if len(uniqTogetherMap) > 0 {
 				uniqTogetherSql := " select " + strings.Join(returningFields, ",") + " from " + tableName + " where "
 				indexTemp := 0
@@ -209,9 +208,11 @@ OutFor:
 					indexTemp += 1
 				}
 				result, _ = utils.FetchRow(db, uniqTogetherSql)
-			} else {
-				result = resultUniqSql
 			}
+		} else {
+			result = resultUniqSql
+		}
+		if result != nil {
 			for _, fieldReturning := range returningFields {
 				if fieldReturning == "id" {
 					id = (*result)["id"]
@@ -226,6 +227,7 @@ OutFor:
 				}
 			}
 		}
+
 		insertSql, updateSetSql, whereSql := GetUpdateSql(driverName, tableName, insertIntoFieldNames, values,
 			needConflictOnFields, updatedFieldSet, distinctExcludedFieldSet)
 		dbRow.sql = insertSql
