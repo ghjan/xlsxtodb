@@ -15,8 +15,8 @@ import (
 	"strings"
 )
 
-func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driverName, tableName string,
-	sheetIndex string) (err error) {
+func FromExcel(c *Columns, sheet *xlsx.Sheet, db *sql.DB, dataStartRow int, driverName,
+	tableName string, sheetIndex string, debug bool) (err error) {
 	err = nil
 	if sheet.Rows == nil {
 		err = errors.New("该sheet没有数据")
@@ -50,6 +50,7 @@ OutFor:
 		returningFields := []string{"id"}
 		var rows *sql.Rows
 		var uniqTogetherMap = map[string]string{}
+		var resultUniqSql *map[string]string
 		for key, columnFieldValues := range c.useColumns {
 			if columnFieldValues == nil || len(sheet.Rows) <= 0 {
 				fmt.Printf("c.useColumns:%#v\n", c.useColumns)
@@ -97,7 +98,7 @@ OutFor:
 						if id != "" {
 							continue
 						}
-						uniqueSql := "SELECT id, " + columnFieldValues[0] + " FROM  " +
+						uniqueSql := "SELECT * FROM  " +
 							utils.EscapeString(driverName, tableName) + "  WHERE  " + columnFieldValues[0] + "  = '" +
 							utils.EscapeSpecificChar(dbRow.value[columnFieldValues[0]]) + "'"
 						if dbRow.value[columnFieldValues[0]] == "" {
@@ -106,8 +107,8 @@ OutFor:
 							continue OutFor
 						}
 						//fmt.Printf("uniqueSql:%s\n", uniqueSql)
-						result, _ := utils.FetchRow(db, uniqueSql)
-						id = (*result)["id"]
+						resultUniqSql, _ = utils.FetchRow(db, uniqueSql)
+						id = (*resultUniqSql)["id"]
 						if id != "" {
 							if needConflictOnFields == "" {
 								needConflictOnFields = columnFieldValues[0]
@@ -195,17 +196,22 @@ OutFor:
 			}
 		}
 
-		if id == "" && len(uniqTogetherMap) > 0 {
-			uniqTogetherSql := " select " + strings.Join(returningFields, ",") + " from " + tableName + " where "
-			indexTemp := 0
-			for field, value := range uniqTogetherMap {
-				if indexTemp > 0 {
-					uniqTogetherSql += " and "
+		if id != "" {
+			var result *map[string]string
+			if len(uniqTogetherMap) > 0 {
+				uniqTogetherSql := " select " + strings.Join(returningFields, ",") + " from " + tableName + " where "
+				indexTemp := 0
+				for field, value := range uniqTogetherMap {
+					if indexTemp > 0 {
+						uniqTogetherSql += " and "
+					}
+					uniqTogetherSql += field + "=" + utils.EscapeValuesString(driverName, value)
+					indexTemp += 1
 				}
-				uniqTogetherSql += field + "=" + utils.EscapeValuesString(driverName, value)
-				indexTemp += 1
+				result, _ = utils.FetchRow(db, uniqTogetherSql)
+			} else {
+				result = resultUniqSql
 			}
-			result, _ := utils.FetchRow(db, uniqTogetherSql)
 			for _, fieldReturning := range returningFields {
 				if fieldReturning == "id" {
 					id = (*result)["id"]
@@ -230,7 +236,9 @@ OutFor:
 			useUpdate = true
 		}
 		dbRow.sql += " RETURNING id"
-		//var row *sql.Row
+		if debug {
+			fmt.Printf("dbRow.sql:%s\n", dbRow.sql)
+		}
 		err = db.QueryRow(dbRow.sql + ";").Scan(&dbRow.insertID)
 		if err != nil || dbRow.insertID == 0 {
 			if !useUpdate || strings.Index(err.Error(), "no rows in result set") < 0 {
@@ -298,6 +306,9 @@ OutFor:
 				dbRow.ot.sql += " ON CONFLICT (" + needConflictOnFieldsOther + ") DO UPDATE SET " +
 					updateSetSql + whereSql
 			}
+			if debug {
+				fmt.Printf("dbRow.ot.sql:%s\n", dbRow.ot.sql)
+			}
 			rows, err := db.Query(dbRow.ot.sql + ";")
 			rows.Close()
 			utils.Checkerr(err, dbRow.ot.sql)
@@ -333,7 +344,7 @@ func ExcelToDB(db *sql.DB, driverName, tableName, excelFileName, sheets string, 
 			}
 			sheet_ := xlFile.Sheets[nIndex]
 			fmt.Printf("--------sheetIndex%s, %s----------\n", sheetIndex, sheet_.Name)
-			err = FromExcel(c, sheet_, db, dataStartRow, driverName, tableName, sheetIndex)
+			err = FromExcel(c, sheet_, db, dataStartRow, driverName, tableName, sheetIndex, false)
 			if err != nil && utils.Checkerr2(err, fmt.Sprintf("sheetIndex:%d", nIndex)) {
 				msg := "error"
 				if err != nil {
