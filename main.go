@@ -102,7 +102,7 @@ func main() {
 
 	defer db.Close()
 	if (excelFileName != "") {
-		convert.ExcelToDB(db, driverName, tableName, excelFileName, sheets, dataStartRow)
+		convert.ExcelToDB(db, driverName, tableName, excelFileName, sheets, dataStartRow, false)
 	} else {
 		convert.JsonToDB(db, driverName, tableName, jsonFileName, nil)
 	}

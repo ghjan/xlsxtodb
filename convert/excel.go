@@ -324,7 +324,7 @@ OutFor:
 	return
 }
 
-func ExcelToDB(db *sql.DB, driverName, tableName, excelFileName, sheets string, dataStartRow int) {
+func ExcelToDB(db *sql.DB, driverName, tableName, excelFileName, sheets string, dataStartRow int, debug bool) {
 	xlFile, err := xlsx.OpenFile(excelFileName)
 	if err != nil {
 		utils.Checkerr(err, excelFileName)
@@ -344,7 +344,7 @@ func ExcelToDB(db *sql.DB, driverName, tableName, excelFileName, sheets string, 
 			}
 			sheet_ := xlFile.Sheets[nIndex]
 			fmt.Printf("--------sheetIndex%s, %s----------\n", sheetIndex, sheet_.Name)
-			err = FromExcel(c, sheet_, db, dataStartRow, driverName, tableName, sheetIndex, false)
+			err = FromExcel(c, sheet_, db, dataStartRow, driverName, tableName, sheetIndex, debug)
 			if err != nil && utils.Checkerr2(err, fmt.Sprintf("sheetIndex:%d", nIndex)) {
 				msg := "error"
 				if err != nil {
