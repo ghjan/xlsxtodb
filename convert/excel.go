@@ -109,7 +109,7 @@ OutFor:
 						//fmt.Printf("uniqueSql:%s\n", uniqueSql)
 						resultUniqSql, _ = utils.FetchRow(db, uniqueSql)
 						id = (*resultUniqSql)["id"]
-						if id != "" {
+						if id != "" && !strings.Contains(needConflictOnFields, columnFieldValues[0]) {
 							if needConflictOnFields == "" {
 								needConflictOnFields = columnFieldValues[0]
 							} else {
@@ -118,10 +118,12 @@ OutFor:
 						}
 					case "uniq_together":
 						uniqTogetherMap[columnFieldValues[0]] = utils.EscapeSpecificChar(dbRow.value[columnFieldValues[0]])
-						if needConflictOnFields == "" {
-							needConflictOnFields = columnFieldValues[0]
-						} else {
-							needConflictOnFields += "," + columnFieldValues[0]
+						if !strings.Contains(needConflictOnFields, columnFieldValues[0]) {
+							if needConflictOnFields == "" {
+								needConflictOnFields = columnFieldValues[0]
+							} else {
+								needConflictOnFields += "," + columnFieldValues[0]
+							}
 						}
 					case "password":
 						tmpvalue := strings.Split(dbRow.value[columnFieldValues[0]], "|")
@@ -174,10 +176,12 @@ OutFor:
 					switch columnFieldValues[len(columnFieldValues)-1] {
 					case "uniq_together":
 						uniqTogetherMap[columnFieldValues[0]] = utils.EscapeSpecificChar(dbRow.value[columnFieldValues[0]])
-						if needConflictOnFields == "" {
-							needConflictOnFields = columnFieldValues[0]
-						} else {
-							needConflictOnFields += "," + columnFieldValues[0]
+						if !strings.Contains(needConflictOnFields, columnFieldValues[0]) {
+							if needConflictOnFields == "" {
+								needConflictOnFields = columnFieldValues[0]
+							} else {
+								needConflictOnFields += "," + columnFieldValues[0]
+							}
 						}
 					}
 				}

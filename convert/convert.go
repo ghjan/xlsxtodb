@@ -68,8 +68,8 @@ func (c *Columns) ParseColumns() {
 	c.useColumns = make(map[int][]string)
 	hitTableColumnSet := set.New()
 	allTableColmnSet := set.New()
-	for key, value := range c.sourceColumns {
-		thiscolumn := value.String()
+	for key, valueSourceColumn := range c.sourceColumns {
+		thiscolumn := valueSourceColumn.String()
 		if thiscolumn == "" || utils.HasChineseChar(thiscolumn) {
 			// 忽略中文字符的字段名
 			continue
@@ -81,11 +81,11 @@ func (c *Columns) ParseColumns() {
 		if columnval[0] == ":other" {
 			c.useColumns[key] = columnval
 		} else {
-			for _, value := range c.tableColumnMap {
-				allTableColmnSet.Add(value)
-				if columnval[0] == value {
+			for _, valueTableColumn := range c.tableColumnMap {
+				allTableColmnSet.Add(valueTableColumn)
+				if columnval[0] == valueTableColumn {
 					c.useColumns[key] = columnval
-					hitTableColumnSet.Add(value)
+					hitTableColumnSet.Add(valueTableColumn)
 				}
 			}
 		}
@@ -97,7 +97,7 @@ func (c *Columns) ParseColumns() {
 	}
 	missTableColumnSet := allTableColmnSet.Difference(hitTableColumnSet)
 	generateFieldSet := missTableColumnSet.Intersect(NeedGenerateFieldSet)
-	keyNext := len(c.useColumns)
+	keyNext := len(c.sourceColumns) + 1
 	for _, v := range generateFieldSet.List() {
 		c.useColumns[keyNext] = []string{v, "generate"}
 		keyNext += 1
