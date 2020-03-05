@@ -78,9 +78,11 @@ OutFor:
 					}
 				}
 			} else {
+				isGenerate := false
 				if len(columnFieldValues) > 1 {
 					switch columnFieldValues[1] {
 					case "generate":
+						isGenerate = true
 						if columnFieldValues[0] == "uuid" {
 							dbRow.value[columnFieldValues[0]] = uuid.New().String()
 							returningFields = append(returningFields, columnFieldValues[0])
@@ -185,14 +187,16 @@ OutFor:
 						}
 					}
 				}
-				var pro bool
-				dbRow.value[columnFieldValues[0]], pro = ParseValue(dbRow.value[columnFieldValues[0]])
+				var processed bool
+				dbRow.value[columnFieldValues[0]], processed = ParseValue(dbRow.value[columnFieldValues[0]])
 
 				if dbRow.value[columnFieldValues[0]] != "" {
 					insertIntoFieldNames = append(insertIntoFieldNames, columnFieldValues[0])
 					values = append(values, utils.EscapeValuesString(driverName, strings.TrimSpace(dbRow.value[columnFieldValues[0]])))
-					updatedFieldSet.Add(columnFieldValues[0])
-					if !pro {
+					if !isGenerate { //自动生成的不能放在update语句里面
+						updatedFieldSet.Add(columnFieldValues[0])
+					}
+					if !processed {
 						distinctExcludedFieldSet.Add(columnFieldValues[0])
 					}
 					tmp++
@@ -200,9 +204,10 @@ OutFor:
 			}
 		}
 		var result *map[string]string
+		uniqTogetherSql := ""
 		if id == "" {
 			if len(uniqTogetherMap) > 0 {
-				uniqTogetherSql := " select " + strings.Join(returningFields, ",") + " from " + tableName + " where "
+				uniqTogetherSql = " select * from " + tableName + " where "
 				indexTemp := 0
 				for field, value := range uniqTogetherMap {
 					if indexTemp > 0 {
@@ -211,7 +216,10 @@ OutFor:
 					uniqTogetherSql += field + "=" + utils.EscapeValuesString(driverName, value)
 					indexTemp += 1
 				}
-				result, _ = utils.FetchRow(db, uniqTogetherSql)
+				result, err = utils.FetchRow(db, uniqTogetherSql)
+				if err != nil {
+					fmt.Printf("FetchRow err,uniqTogetherSql:%s, error:%s\n", uniqTogetherSql, err.Error())
+				}
 			}
 		} else {
 			result = resultUniqSql
@@ -224,6 +232,7 @@ OutFor:
 					if (*result)[fieldReturning] == "" || (*result)[fieldReturning] == "NULL" {
 						updatedFieldSet.Add(fieldReturning)
 						distinctExcludedFieldSet.Add(fieldReturning)
+						fmt.Printf("fieldReturning:%s, (*result)[fieldReturning]:%s, uniqTogetherSql:%s\n", fieldReturning, (*result)[fieldReturning], uniqTogetherSql)
 					} else {
 						updatedFieldSet.Remove(fieldReturning)
 						distinctExcludedFieldSet.Remove(fieldReturning)
@@ -255,11 +264,14 @@ OutFor:
 			}
 		}
 		idOfMainRecord := int(dbRow.insertID)
-		if idOfMainRecord == 0 {
-			fmt.Println(dbRow.sql)
+		ignored := idOfMainRecord == 0
+		if ignored {
+			fmt.Printf("ignored,sql:%s\n", dbRow.sql)
 			if id != "" {
 				idOfMainRecord, _ = strconv.Atoi(id)
 			}
+		} else if debug {
+			fmt.Printf("debug,sql:%s\n", dbRow.sql)
 		}
 		if idOfMainRecord == 0 {
 			err = errors.New("id is 0")

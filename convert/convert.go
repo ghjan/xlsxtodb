@@ -118,7 +118,7 @@ func ParseValue(val string) (result string, processed bool) {
 			utils.KC_RAND_KIND_ALL)), 0, 32), "+/", "_-", -1)
 		processed = true
 	default:
-		result = val
+		result = strings.TrimSpace(val)
 		processed = false
 	}
 	return result, processed
