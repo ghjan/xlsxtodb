@@ -190,7 +190,7 @@ OutFor:
 
 				if dbRow.value[columnFieldValues[0]] != "" {
 					insertIntoFieldNames = append(insertIntoFieldNames, columnFieldValues[0])
-					values = append(values, utils.EscapeValuesString(driverName, dbRow.value[columnFieldValues[0]]))
+					values = append(values, utils.EscapeValuesString(driverName, strings.TrimSpace(dbRow.value[columnFieldValues[0]])))
 					updatedFieldSet.Add(columnFieldValues[0])
 					if !pro {
 						distinctExcludedFieldSet.Add(columnFieldValues[0])
