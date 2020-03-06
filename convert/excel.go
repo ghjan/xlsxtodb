@@ -158,12 +158,12 @@ OutFor:
 					case "find":
 						result, _ := utils.FetchRow(db, "SELECT  "+columnFieldValues[3]+"  FROM  "+
 							utils.EscapeString(driverName, columnFieldValues[2])+"  WHERE "+columnFieldValues[4]+
-							" = '"+dbRow.value[columnFieldValues[0]]+"'")
+							" = '"+strings.TrimSpace(dbRow.value[columnFieldValues[0]])+"'")
 						if (*result)["id"] == "" {
 							//sign <- "error"
 							msg := "[sheet" + sheetIndex + "-" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) + "]表 " +
 								columnFieldValues[2] + " 中没有找到 " + columnFieldValues[4] + " 为 " +
-								dbRow.value[columnFieldValues[0]] + " 的数据，自动跳过"
+								dbRow.value[columnFieldValues[0]] + "的数据，自动跳过"
 							fmt.Println(msg)
 							//有的数据不合法 跳过就可以 不必停止处理其它数据
 							continue OutFor
