@@ -51,6 +51,7 @@ OutFor:
 		var rows *sql.Rows
 		var uniqTogetherMap = map[string]string{}
 		var resultUniqSql *map[string]string
+	InnerFor:
 		for key, columnFieldValues := range c.useColumns {
 			if columnFieldValues == nil || len(sheet.Rows) <= 0 {
 				fmt.Printf("c.useColumns:%#v\n", c.useColumns)
@@ -156,19 +157,21 @@ OutFor:
 							dbRow.value[columnFieldValues[0]] = string(pass)
 						}
 					case "find":
-						result, _ := utils.FetchRow(db, "SELECT  "+columnFieldValues[3]+"  FROM  "+
-							utils.EscapeString(driverName, columnFieldValues[2])+"  WHERE "+columnFieldValues[4]+
-							" = '"+strings.TrimSpace(dbRow.value[columnFieldValues[0]])+"'")
+						if strings.TrimSpace(dbRow.value[columnFieldValues[0]]) == "" {
+							//空白列 跳过该列
+							continue InnerFor
+						}
+						sqlFind := "SELECT * FROM  " + utils.EscapeString(driverName, columnFieldValues[2]) +
+							"  WHERE " + columnFieldValues[4] + " = '" +
+							strings.TrimSpace(dbRow.value[columnFieldValues[0]]) + "'"
+						result, _ := utils.FetchRow(db, sqlFind)
 						if (*result)["id"] == "" {
-							//sign <- "error"
-							msg := "[sheet" + sheetIndex + "-" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) + "]表 " +
-								columnFieldValues[2] + " 中没有找到 " + columnFieldValues[4] + " 为 " +
+							msg := "[sheet" + sheetIndex + "-" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) + "]表" +
+								columnFieldValues[2] + " 中没有找到" + columnFieldValues[4] + " 为 " +
 								dbRow.value[columnFieldValues[0]] + "的数据，自动跳过"
 							fmt.Println(msg)
 							//有的数据不合法 跳过就可以 不必停止处理其它数据
 							continue OutFor
-							//err = errors.New(msg)
-							//return
 						}
 						distinctExcludedFieldSet.Add(columnFieldValues[0])
 						updatedFieldSet.Add(columnFieldValues[0])
