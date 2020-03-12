@@ -165,9 +165,9 @@ OutFor:
 							"  WHERE " + columnFieldValues[4] + " = '" +
 							strings.TrimSpace(dbRow.value[columnFieldValues[0]]) + "'"
 						result, _ := utils.FetchRow(db, sqlFind)
-						if (*result)["id"] == "" {
+						if (*result)[columnFieldValues[3]] == "" {
 							msg := "[sheet" + sheetIndex + "-" + strconv.Itoa(rowIndex+1) + "/" + strconv.Itoa(rowsNum+1) + "]表" +
-								columnFieldValues[2] + " 中没有找到" + columnFieldValues[4] + " 为 " +
+								columnFieldValues[2] + "中没有找到" + columnFieldValues[4] + "为" +
 								dbRow.value[columnFieldValues[0]] + "的数据，自动跳过"
 							fmt.Println(msg)
 							//有的数据不合法 跳过就可以 不必停止处理其它数据
@@ -175,7 +175,7 @@ OutFor:
 						}
 						distinctExcludedFieldSet.Add(columnFieldValues[0])
 						updatedFieldSet.Add(columnFieldValues[0])
-						dbRow.value[columnFieldValues[0]] = (*result)["id"]
+						dbRow.value[columnFieldValues[0]] = (*result)[columnFieldValues[3]]
 					}
 
 					switch columnFieldValues[len(columnFieldValues)-1] {
